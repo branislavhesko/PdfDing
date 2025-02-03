@@ -19,7 +19,7 @@ To install Helm, see [Helm Installation guide](https://helm.sh/docs/intro/instal
 To add the PdfDing helm repository, run command:
 
 ```bash
-helm repo add pdfding https://mrmn2.github.io/PdfDing/
+helm repo add pdfding https://charts.pdfding.com/
 ```
 
 To install the PdfDing helm chart with a release name `my-release` in `ns` namespace, run command:
@@ -39,7 +39,7 @@ helm -n ns upgrade my-release pdfding/pdfding
 
 To configure the Helm chart deployment, the configurable parameters can be found in `values.yaml` values file.
 Those parameters can be set via `--set` flag during installation or configured by editing the `values.yaml` directly.
-An example configuration can be found in the file [values.demo.yaml](./values.demo.yaml), which contains the values used for
+An example configuration can be found in the file [values.demo.yaml](https://github.com/mrmn2/PdfDing/blob/master/helm-charts/pdfding/values.demo.yaml), which contains the values used for
 deploying PdfDing's demo instance.
 
 To uninstall/delete the `my-release` deployment, run command:
