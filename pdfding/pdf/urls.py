@@ -1,5 +1,6 @@
 import pdf.views.pdf_views as pdf_views
 import pdf.views.share_views as share_views
+import pdf.views.folder_views as folder_views
 from django.urls import path
 
 urlpatterns = [
@@ -79,4 +80,10 @@ urlpatterns = [
     # tag related views
     path('delete_tag/', pdf_views.DeleteTag.as_view(), name='delete_tag'),
     path('edit_tag/', pdf_views.EditTag.as_view(), name='edit_tag'),
+    # folder related views
+    path('folder/create/', folder_views.CreateFolder.as_view(), name='create_folder'),
+    path('folder/delete/<identifier>', folder_views.DeleteFolder.as_view(), name='delete_folder'),
+    path('folder/edit/<identifier>', folder_views.EditFolder.as_view(), name='edit_folder'),
+    path('folder/move_pdf/', folder_views.MovePdfToFolder.as_view(), name='move_pdf_to_folder'),
+    path('folder/tree/', folder_views.FolderTree.as_view(), name='folder_tree'),
 ]

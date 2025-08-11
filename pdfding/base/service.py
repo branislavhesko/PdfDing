@@ -74,11 +74,15 @@ def construct_query_overview_url(
     special_selection_query: str,
     remove_tag_query: str,
     obj_name: str,
+    folder_query: str = ''
 ) -> str:
     """Constructs the overview url after performing a search in the overview pages."""
 
     parsed_referer_url = urlparse(referer_url)
     query_parameters = parse_qs(parsed_referer_url.query)
+
+    if folder_query:
+        query_parameters['folder'] = [folder_query]
 
     # special selection, and searching are never performed at the same time, thus we can use if ... elif
     if special_selection_query:

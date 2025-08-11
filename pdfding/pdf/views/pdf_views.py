@@ -12,7 +12,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 from django_htmx.http import HttpResponseClientRedirect, HttpResponseClientRefresh
 from pdf import forms, service
-from pdf.models import Pdf, PdfComment, PdfHighlight, Tag
+from pdf.models import Pdf, PdfComment, PdfHighlight, Tag, Folder
 from pdf.service import PdfProcessingServices
 from rapidfuzz import fuzz, utils
 from users.models import Profile
@@ -150,6 +150,7 @@ class OverviewMixin(BasePdfMixin):
 
         search = request.GET.get('search', '')
         tags = request.GET.get('tags', [])
+        folder_id = request.GET.get('folder', '')
 
         # filter for starred or archived pdfs
         pdf_selection = request.GET.get('selection', '')
@@ -166,6 +167,16 @@ class OverviewMixin(BasePdfMixin):
 
         for tag in tags:
             pdfs = pdfs.filter(Q(tags__name=tag) | Q(tags__name__startswith=f'{tag}/')).distinct()
+
+        # Filter by folder
+        if folder_id == 'root':
+            pdfs = pdfs.filter(folder__isnull=True)
+        elif folder_id:
+            try:
+                folder = Folder.objects.get(id=folder_id, owner=request.user.profile)
+                pdfs = pdfs.filter(folder=folder)
+            except Folder.DoesNotExist:
+                pass  # Invalid folder ID, ignore filter
 
         if search:
             pdfs = cls.fuzzy_filter_pdfs(pdfs, search)
@@ -204,6 +215,17 @@ class OverviewMixin(BasePdfMixin):
             special_pdf_selection = ''
             page = 'pdf_overview'
 
+        # Get folder info
+        current_folder_id = request.GET.get('folder', '')
+        current_folder = None
+        if current_folder_id and current_folder_id != 'root':
+            try:
+                current_folder = Folder.objects.get(id=current_folder_id, owner=request.user.profile)
+            except Folder.DoesNotExist:
+                pass
+
+        folders = Folder.objects.filter(owner=request.user.profile).select_related('parent')
+
         extra_context = {
             'search_query': request.GET.get('search', ''),
             'tag_query': tag_query,
@@ -211,6 +233,9 @@ class OverviewMixin(BasePdfMixin):
             'tag_info_dict': service.TagServices.get_tag_info_dict(request.user.profile),
             'page': page,
             'layout': request.user.profile.layout,
+            'current_folder': current_folder,
+            'current_folder_id': current_folder_id,
+            'folders': folders,
         }
 
         return extra_context

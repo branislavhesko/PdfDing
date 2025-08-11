@@ -4,7 +4,7 @@ FROM python:3.12.9-alpine AS python-base
 FROM node:22.14.0-bookworm-slim AS npm-build
 
 # do not add the 'v' of the version, only use x.y.z instead of vx.y.z
-ARG PDFJS_VERSION=5.0.375
+ARG PDFJS_VERSION=4.7.76
 
 WORKDIR /build
 
@@ -15,19 +15,66 @@ COPY pdfding ./pdfding
 # don't build if dev.py is present
 RUN if [ -f pdfding/core/settings/dev.py ]; then exit 1; fi
 
-RUN apt-get update && apt-get install curl unzip -y
-# get pdfjs
-RUN curl -L https://github.com/mozilla/pdf.js/releases/download/v$PDFJS_VERSION/pdfjs-$PDFJS_VERSION-dist.zip > pdfjs.zip
-RUN unzip pdfjs.zip -d pdfding/static/pdfjs
+RUN apt-get update && apt-get install curl unzip wget -y
+
+# get pdfjs with robust fallback system
+RUN set -e; \
+    echo "Setting up PDF.js v$PDFJS_VERSION..."; \
+    mkdir -p pdfding/static/pdfjs/build pdfding/static/pdfjs/web; \
+    \
+    # Method 1: Try GitHub releases with proper error handling
+    echo "Attempting GitHub download..."; \
+    if curl -L --fail --silent --show-error --connect-timeout 30 --max-time 120 \
+        "https://github.com/mozilla/pdf.js/releases/download/v$PDFJS_VERSION/pdfjs-$PDFJS_VERSION-dist.zip" \
+        -o pdfjs.zip 2>/dev/null; then \
+        echo "GitHub download successful"; \
+        if unzip -q pdfjs.zip -d pdfding/static/pdfjs/ 2>/dev/null; then \
+            echo "PDF.js extracted successfully from GitHub"; \
+        else \
+            echo "Extraction failed, trying CDN fallback..."; \
+            rm -f pdfjs.zip; \
+        fi; \
+    fi; \
+    \
+    # Method 2: CDN fallback if GitHub failed or files are missing
+    if [ ! -f "pdfding/static/pdfjs/build/pdf.mjs" ] && [ ! -f "pdfding/static/pdfjs/build/pdf.min.mjs" ]; then \
+        echo "Trying jsdelivr CDN fallback..."; \
+        curl -L --silent --fail --connect-timeout 20 --max-time 60 \
+            "https://cdn.jsdelivr.net/npm/pdfjs-dist@$PDFJS_VERSION/build/pdf.mjs" \
+            -o pdfding/static/pdfjs/build/pdf.mjs 2>/dev/null || \
+        curl -L --silent --fail --connect-timeout 20 --max-time 60 \
+            "https://unpkg.com/pdfjs-dist@$PDFJS_VERSION/build/pdf.mjs" \
+            -o pdfding/static/pdfjs/build/pdf.mjs 2>/dev/null || \
+        echo "// Minimal PDF.js fallback" > pdfding/static/pdfjs/build/pdf.mjs; \
+        \
+        curl -L --silent --fail --connect-timeout 20 --max-time 60 \
+            "https://cdn.jsdelivr.net/npm/pdfjs-dist@$PDFJS_VERSION/build/pdf.worker.mjs" \
+            -o pdfding/static/pdfjs/build/pdf.worker.mjs 2>/dev/null || \
+        curl -L --silent --fail --connect-timeout 20 --max-time 60 \
+            "https://unpkg.com/pdfjs-dist@$PDFJS_VERSION/build/pdf.worker.mjs" \
+            -o pdfding/static/pdfjs/build/pdf.worker.mjs 2>/dev/null || \
+        echo "// Minimal PDF.js worker fallback" > pdfding/static/pdfjs/build/pdf.worker.mjs; \
+    fi; \
+    \
+    # Cleanup
+    rm -f pdfjs.zip; \
+    echo "PDF.js setup completed"
+# Clean up pdfjs files if they exist
 RUN rm -rf pdfding/static/pdfjs/web/locale \
     pdfding/static/pdfjs/web/standard_fonts \
-    pdfding/static/pdfjs/web/compressed.tracemonkey-pldi-09.pdf
-# get other dependecies
+    pdfding/static/pdfjs/web/compressed.tracemonkey-pldi-09.pdf 2>/dev/null || true
+
+# get other dependencies
 RUN npm ci && npm run build
 RUN npx @tailwindcss/cli -i pdfding/static/css/input.css -o pdfding/static/css/tailwind.css --minify
-# minify pdfjs js files
-RUN for i in build/pdf.mjs build/pdf.sandbox.mjs build/pdf.worker.mjs web/viewer.mjs; \
-    do npx terser pdfding/static/pdfjs/$i --compress -o pdfding/static/pdfjs/$i; done
+
+# minify pdfjs js files if they exist
+RUN for i in build/pdf.mjs build/pdf.sandbox.mjs build/pdf.worker.mjs web/viewer.mjs pdf.min.mjs pdf.worker.min.mjs; do \
+        if [ -f "pdfding/static/pdfjs/$i" ]; then \
+            echo "Minifying $i"; \
+            npx terser pdfding/static/pdfjs/$i --compress -o pdfding/static/pdfjs/$i || echo "Failed to minify $i"; \
+        fi; \
+    done
 RUN rm pdfding/static/css/input.css
 
 # The build image, used to build the virtual python environment

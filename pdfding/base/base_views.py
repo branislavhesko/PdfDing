@@ -85,9 +85,10 @@ class BaseOverviewQuery(View):
         search_query = request.GET.get('search', '')
         remove_tag_query = request.GET.get('remove', '')
         special_selection_query = request.GET.get('selection', '')
+        folder_query = request.GET.get('folder', '')
 
         redirect_url = construct_query_overview_url(
-            referer_url, search_query, special_selection_query, remove_tag_query, self.obj_name
+            referer_url, search_query, special_selection_query, remove_tag_query, self.obj_name, folder_query
         )
 
         return redirect(redirect_url)

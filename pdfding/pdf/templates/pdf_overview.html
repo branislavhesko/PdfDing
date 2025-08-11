@@ -52,6 +52,87 @@
          class="fixed inset-x-0 top-40 mx-auto my-auto w-80! lg:w-[28rem]! z-20">
         <div id="delete_pdf_modal"></div>
     </div>
+    
+    <!-- Folder modal -->
+    <div id="folder-modal-overlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center"
+         x-data="{ show: false }"
+         x-show="show"
+         @click.self="show = false; document.getElementById('folder-modal-content').innerHTML = ''"
+         @open-folder-modal.window="show = true; document.getElementById('folder-modal-overlay').classList.remove('hidden')"
+         x-ref="folderModal">
+        <div class="bg-white dark:bg-gray-800 creme:bg-stone-100 rounded-lg shadow-lg max-w-md w-full mx-4 max-h-96 overflow-auto">
+            <div id="folder-modal-content">
+                <!-- Modal content will be loaded here by HTMX -->
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+// Drag and drop functionality for PDFs
+document.addEventListener('DOMContentLoaded', function() {
+    // Make PDF items draggable
+    document.addEventListener('mousedown', function(e) {
+        const pdfCard = e.target.closest('[data-pdf-id]');
+        if (pdfCard) {
+            pdfCard.draggable = true;
+            pdfCard.addEventListener('dragstart', function(e) {
+                e.dataTransfer.setData('text/plain', pdfCard.dataset.pdfId);
+                e.dataTransfer.effectAllowed = 'move';
+                pdfCard.style.opacity = '0.5';
+            });
+            pdfCard.addEventListener('dragend', function(e) {
+                pdfCard.style.opacity = '';
+                pdfCard.draggable = false;
+            });
+        }
+    });
+
+    // Handle drop on folders
+    window.handleDrop = function(event, folderId) {
+        event.preventDefault();
+        const pdfId = event.dataTransfer.getData('text/plain');
+        
+        if (pdfId) {
+            // Send AJAX request to move PDF
+            const formData = new FormData();
+            formData.append('pdf_id', pdfId);
+            formData.append('folder_id', folderId);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            
+            fetch('{% url "move_pdf_to_folder" %}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Refresh the page or update the UI
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while moving the PDF.');
+            });
+        }
+    };
+
+    // Show/hide folder modal
+    document.addEventListener('htmx:beforeRequest', function(event) {
+        if (event.detail.requestConfig.verb === 'GET' && event.target.id === 'folder-modal') {
+            document.getElementById('folder-modal').classList.remove('hidden');
+        }
+    });
+
+    document.addEventListener('htmx:afterRequest', function(event) {
+        if (event.target.id === 'folder-modal' && event.detail.xhr.status >= 200 && event.detail.xhr.status < 300) {
+            document.getElementById('folder-modal').classList.add('hidden');
+        }
+    });
+});
+</script>
 
 {% endblock %}

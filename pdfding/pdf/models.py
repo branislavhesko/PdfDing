@@ -40,6 +40,46 @@ class Tag(models.Model):
         return sorted(names)
 
 
+class Folder(models.Model):
+    """The model for folders used for organizing PDF files."""
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    name = models.CharField(max_length=100, null=False, blank=False)
+    description = models.TextField(null=True, blank=True, help_text='Optional folder description')
+    owner = models.ForeignKey(Profile, on_delete=models.CASCADE)
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subfolders')
+    creation_date = models.DateTimeField(blank=False, editable=False, auto_now_add=True)
+
+    class Meta:
+        unique_together = ['name', 'owner', 'parent']
+        ordering = ['name']
+
+    def __str__(self):  # pragma: no cover
+        return str(self.name)
+
+    @property
+    def full_path(self):
+        """Get the full path of the folder including parent folders."""
+        if self.parent:
+            return f"{self.parent.full_path}/{self.name}"
+        return self.name
+
+    @property
+    def natural_age(self) -> str:  # pragma: no cover
+        """
+        Get the natural age of the folder. This converts the creation date to a natural age,
+        e.g: 2 minutes, 1 hour, 2 months, etc
+        """
+        return convert_to_natural_age(self.creation_date)
+
+    def get_pdf_count(self):
+        """Get the number of PDFs in this folder and all subfolders."""
+        count = self.pdfs.count()
+        for subfolder in self.subfolders.all():
+            count += subfolder.get_pdf_count()
+        return count
+
+
 def get_file_path(instance, filename):
     """
     Get the file path for a PDF inside the media root. Preserves original filename when possible,
@@ -195,6 +235,7 @@ class Pdf(models.Model):
     tags = models.ManyToManyField(Tag, blank=True)
     thumbnail = models.FileField(upload_to=get_thumbnail_path, null=True, blank=False)
     views = models.IntegerField(default=0)
+    folder = models.ForeignKey(Folder, on_delete=models.SET_NULL, null=True, blank=True, related_name='pdfs')
 
     def __str__(self):
         return self.name  # pragma: no cover

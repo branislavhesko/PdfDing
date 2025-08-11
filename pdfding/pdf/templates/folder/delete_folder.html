@@ -1,0 +1,94 @@
+{% extends 'layouts/box.html' %}
+
+{% block content %}
+<h1 class="mb-6 text-red-600 dark:text-red-400">Delete Folder: "{{ folder.name }}"</h1>
+
+<div class="bg-yellow-50 dark:bg-yellow-900/20 creme:bg-yellow-100 border-l-4 border-yellow-400 p-4 mb-6">
+    <div class="flex">
+        <div class="ml-3">
+            <p class="text-sm text-yellow-700 dark:text-yellow-300 creme:text-yellow-800">
+                <strong>Warning:</strong> This action cannot be undone.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="mb-6 p-4 bg-gray-50 dark:bg-gray-800 creme:bg-stone-100 rounded-lg">
+    <h3 class="text-lg font-medium mb-2">Folder Contents:</h3>
+    <ul class="text-sm space-y-1">
+        <li>📁 <strong>{{ subfolder_count }}</strong> subfolder{{ subfolder_count|pluralize }}</li>
+        <li>📄 <strong>{{ pdf_count }}</strong> PDF{{ pdf_count|pluralize }}</li>
+    </ul>
+</div>
+
+<form method="POST">
+    {% csrf_token %}
+    
+    <div class="space-y-4 mb-6">
+        <p class="text-sm font-medium text-gray-700 dark:text-gray-300 creme:text-stone-600">
+            What would you like to do with the contents of this folder?
+        </p>
+        
+        <div class="space-y-2">
+            <label class="flex items-start space-x-3 cursor-pointer">
+                <input type="radio" name="action" value="move_to_parent" 
+                       {% if folder.parent %}checked{% endif %}
+                       class="mt-1 text-primary focus:ring-primary">
+                <div>
+                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100 creme:text-stone-800">
+                        Move to parent folder
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 creme:text-stone-600">
+                        {% if folder.parent %}
+                            Move all contents to "{{ folder.parent.name }}"
+                        {% else %}
+                            This folder has no parent folder
+                        {% endif %}
+                    </div>
+                </div>
+            </label>
+            
+            <label class="flex items-start space-x-3 cursor-pointer">
+                <input type="radio" name="action" value="move_to_root" 
+                       {% if not folder.parent %}checked{% endif %}
+                       class="mt-1 text-primary focus:ring-primary">
+                <div>
+                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100 creme:text-stone-800">
+                        Move to root (no folder)
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 creme:text-stone-600">
+                        Move all contents to the root level
+                    </div>
+                </div>
+            </label>
+            
+            <label class="flex items-start space-x-3 cursor-pointer">
+                <input type="radio" name="action" value="delete_all" 
+                       class="mt-1 text-red-500 focus:ring-red-500">
+                <div>
+                    <div class="text-sm font-medium text-red-600 dark:text-red-400">
+                        Delete everything
+                    </div>
+                    <div class="text-sm text-red-500 dark:text-red-400">
+                        Permanently delete the folder and all its contents
+                    </div>
+                </div>
+            </label>
+        </div>
+    </div>
+    
+    <div class="flex justify-end space-x-2 pt-4">
+        <button type="button" 
+                onclick="history.back()"
+                class="px-4 py-2 text-gray-700 dark:text-gray-300 creme:text-stone-600 
+                       bg-gray-200 dark:bg-gray-600 creme:bg-stone-300 
+                       rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 creme:hover:bg-stone-400">
+            Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md">
+            Delete Folder
+        </button>
+    </div>
+</form>
+{% endblock %}
