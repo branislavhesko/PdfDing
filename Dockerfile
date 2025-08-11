@@ -99,7 +99,8 @@ COPY --chown=$USERNAME --from=python-build /app/pdfding /home/$USERNAME/pdfding
 
 WORKDIR /home/$USERNAME
 COPY supervisord.conf ./
-COPY --chmod=0555 bootstrap.sh ./
+COPY bootstrap.sh ./
+RUN chmod 0555 bootstrap.sh
 
 USER $USERNAME
 

@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 import markdown
@@ -9,7 +10,6 @@ from django.contrib.humanize.templatetags.humanize import naturaltime
 from django.db import models
 from django.db.models import DateTimeField
 from django.utils.safestring import mark_safe
-from django.utils.text import slugify
 from users.models import Profile
 
 
@@ -17,7 +17,7 @@ class Tag(models.Model):
     """The model for the tags used for organizing PDF files."""
 
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    name = models.CharField(max_length=50, null=True, blank=False)
+    name = models.CharField(max_length=100, null=True, blank=False)
     owner = models.ForeignKey(Profile, on_delete=models.CASCADE)
 
     def __str__(self):  # pragma: no cover
@@ -40,39 +40,68 @@ class Tag(models.Model):
         return sorted(names)
 
 
-def get_file_path(instance, _):
+def get_file_path(instance, filename):
     """
-    Get the file path for a PDF inside the media root based on the pdf name.File paths are user_id/some/dir/name.pdf.
-    This function will also replace any "/" in the pdf name and will make  sure there are no duplicate file names.
+    Get the file path for a PDF inside the media root. Preserves original filename when possible,
+    with minimal sanitization for filesystem safety. File paths are user_id/some/dir/original_name.pdf.
+    This function will ensure there are no duplicate file names and handle unsafe characters.
     """
-
-    # replace any space char with _
-    file_name = re.sub(r'\s+', '_', instance.name)
-    file_name = file_name.replace('/', '_')
-    file_name = str.lower(file_name)
-    # remove non alphanumerical characters
-    file_name = slugify(file_name, allow_unicode=True)
-
-    sub_dir = instance.file_directory
-
-    # make sure file name is not empty
-    if not file_name:
+    
+    # If we have an original filename from upload, use it; otherwise use the instance name
+    if filename:
+        # Handle filename safely - don't let Path interpret slashes as path separators
+        if '.' in filename:
+            base_name, ext = filename.rsplit('.', 1)
+            extension = f'.{ext.lower()}'
+            # Ensure it's a PDF extension
+            if extension != '.pdf':
+                extension = '.pdf'
+        else:
+            base_name = filename
+            extension = '.pdf'
+    else:
+        # Fallback to instance name if no filename
+        base_name = instance.name or 'pdf'
+        extension = '.pdf'
+    
+    # Minimal sanitization - only replace characters that are problematic for filesystems
+    # Replace forward slashes, backslashes, and other problematic characters
+    file_name = base_name.replace('/', '_').replace('\\', '_')
+    # Remove or replace other problematic characters but preserve most Unicode
+    file_name = re.sub(r'[<>:"|?*]', '_', file_name)
+    # Remove leading/trailing whitespace and dots (problematic on some filesystems)
+    file_name = file_name.strip(' .')
+    
+    # Ensure we have a valid filename
+    if not file_name or file_name.isspace():
         file_name = 'pdf'
-
-    file_name = f'{file_name}.pdf'
-
+    
+    # Add extension
+    file_name = f'{file_name}{extension}'
+    
+    sub_dir = instance.file_directory
+    
+    # Build the full file path
     if sub_dir:
-        sub_dir.strip()
+        sub_dir = sub_dir.strip()
         file_path = '/'.join([str(instance.owner.user.id), 'pdf', sub_dir, file_name])
     else:
         file_path = '/'.join([str(instance.owner.user.id), 'pdf', file_name])
-
+    
+    # Check for existing file with same path
     existing_pdf = Pdf.objects.filter(file=file_path).first()
-
-    # make sure there each file path is unique
+    
+    # If there's a conflict and it's not the same PDF, add a suffix
     if existing_pdf and str(existing_pdf.id) != str(instance.id):
-        file_path = file_path.replace('.pdf', f'_{str(uuid4())[:8]}.pdf')
-
+        name_without_ext = file_name.rsplit('.', 1)[0]
+        file_name = f'{name_without_ext}_{str(uuid4())[:8]}{extension}'
+        
+        # Rebuild the path with the new filename
+        if sub_dir:
+            file_path = '/'.join([str(instance.owner.user.id), 'pdf', sub_dir, file_name])
+        else:
+            file_path = '/'.join([str(instance.owner.user.id), 'pdf', file_name])
+    
     return file_path
 
 
@@ -146,17 +175,17 @@ class Pdf(models.Model):
     current_page = models.IntegerField(default=1)
     description = models.TextField(null=True, blank=True, help_text='Optional')
     file_directory = models.CharField(
-        max_length=120,
+        max_length=240,
         null=True,
         blank=True,
         help_text='Optional, save file in a sub directory of the pdf directory, e.g: important/pdfs',
     )
-    file = models.FileField(upload_to=get_file_path, max_length=500, blank=False)
+    file = models.FileField(upload_to=get_file_path, max_length=1000, blank=False)
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     last_viewed_date = models.DateTimeField(
         blank=False, editable=False, default=datetime(2000, 1, 1, tzinfo=timezone.utc)
     )
-    name = models.CharField(max_length=150, null=True, blank=False)
+    name = models.CharField(max_length=300, null=True, blank=False)
     notes = models.TextField(null=True, blank=True, help_text='Optional, supports Markdown')
     number_of_pages = models.IntegerField(default=-1)
     owner = models.ForeignKey(Profile, on_delete=models.CASCADE, blank=False)
@@ -265,7 +294,7 @@ class SharedPdf(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     owner = models.ForeignKey(Profile, on_delete=models.CASCADE, blank=False)
     pdf = models.ForeignKey(Pdf, on_delete=models.CASCADE, blank=False)
-    name = models.CharField(max_length=150, null=True, blank=False)
+    name = models.CharField(max_length=300, null=True, blank=False)
     # the qr code file
     file = models.FileField(upload_to=get_qrcode_file_path, blank=False)
     description = models.TextField(null=True, blank=True, help_text='Optional')

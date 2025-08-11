@@ -1,9 +1,11 @@
-version: '3'
-
 services:
   pdfding:
     container_name: pdfding
-    image: mrmn/pdfding:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: pdfding:custom
+    restart: unless-stopped
     volumes:
       - sqlite_data:/home/nonroot/pdfding/db
       - media:/home/nonroot/pdfding/media
@@ -14,12 +16,13 @@ services:
       - DEFAULT_THEME=${DEFAULT_THEME:-dark}
       - DEFAULT_THEME_COLOR=${DEFAULT_THEME_COLOR:-blue}
       # use a long random secret
-      - SECRET_KEY=${SECRET_KEY:-some_secret}
+      - SECRET_KEY=${SECRET_KEY:-whos_gone_save_the_world}
       # the domain where you want to access PdfDing, e.g. pdfding.com
-      - HOST_NAME=${HOST_NAME:-127.0.0.1}
+      - HOST_NAME=${HOST_NAME:-pdf.hesko.space, pdf.hesko.ai}
       # In production set the following values to True
       - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-FALSE}
       - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-FALSE}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-127.0.0.1,localhost,pdf.hesko.space,pdf.hesko.ai}
     ports:
       - "8000:8000"
 

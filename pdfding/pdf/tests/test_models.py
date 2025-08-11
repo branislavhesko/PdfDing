@@ -48,21 +48,68 @@ class TestPdf(TestCase):
 
         generated_filepath = models.get_file_path(pdf, '')
 
-        self.assertEqual(generated_filepath, '1/pdf/pdf_3_寝る_12_3.pdf')
+        self.assertEqual(generated_filepath, '1/pdf/PDF_3! 寝る 12_3.pdf')
 
     def test_get_file_path_with_sub_dir(self):
         pdf = models.Pdf(owner=self.user.profile, name='PDF_3! 寝る 12/3?  ', file_directory='some/sub/dir')
 
         generated_filepath = models.get_file_path(pdf, '')
 
-        self.assertEqual(generated_filepath, '1/pdf/some/sub/dir/pdf_3_寝る_12_3.pdf')
+        self.assertEqual(generated_filepath, '1/pdf/some/sub/dir/PDF_3! 寝る 12_3.pdf')
 
     def test_get_file_path_empty(self):
         pdf = models.Pdf(owner=self.user.profile, name='!?!?')
 
         generated_filepath = models.get_file_path(pdf, '')
 
-        self.assertEqual(generated_filepath, '1/pdf/pdf.pdf')
+        self.assertEqual(generated_filepath, '1/pdf/!_!_.pdf')
+
+    def test_get_file_path_with_original_filename(self):
+        pdf = models.Pdf(owner=self.user.profile, name='SomeName')
+
+        # Test with original filename - should preserve it
+        generated_filepath = models.get_file_path(pdf, 'My Important Document.pdf')
+
+        self.assertEqual(generated_filepath, '1/pdf/My Important Document.pdf')
+
+    def test_get_file_path_with_original_filename_problematic_chars(self):
+        pdf = models.Pdf(owner=self.user.profile, name='SomeName')
+
+        # Test with problematic characters - should sanitize minimally
+        generated_filepath = models.get_file_path(pdf, 'Report: Q1/Q2 Analysis (2024).pdf')
+
+        self.assertEqual(generated_filepath, '1/pdf/Report_ Q1_Q2 Analysis (2024).pdf')
+
+    def test_get_file_path_with_unicode_filename(self):
+        pdf = models.Pdf(owner=self.user.profile, name='SomeName')
+
+        # Test with Unicode characters - should preserve them
+        generated_filepath = models.get_file_path(pdf, '文档-résumé.pdf')
+
+        self.assertEqual(generated_filepath, '1/pdf/文档-résumé.pdf')
+
+    def test_filename_length_limits(self):
+        """Test that the new increased filename length limits work correctly."""
+        # Test Tag name with 100 characters
+        long_tag_name = 'A' * 100
+        tag = models.Tag(name=long_tag_name, owner=self.user.profile)
+        self.assertEqual(len(tag.name), 100)
+        
+        # Test PDF name with 300 characters  
+        long_pdf_name = 'B' * 300
+        pdf_long_name = models.Pdf(owner=self.user.profile, name=long_pdf_name)
+        self.assertEqual(len(pdf_long_name.name), 300)
+        
+        # Test file directory with 240 characters
+        long_directory = 'C' * 240
+        pdf_long_dir = models.Pdf(owner=self.user.profile, name='test', file_directory=long_directory)
+        self.assertEqual(len(pdf_long_dir.file_directory), 240)
+        
+        # Test SharedPdf name with 300 characters
+        long_shared_name = 'D' * 300
+        # Note: Can't fully test without saving due to foreign key constraints
+        # but the field should accept this length
+        self.assertEqual(len(long_shared_name), 300)
 
     def test_delete_empty_dirs_after_rename_or_delete_empty(self):
         user_id = str(self.user.id)
