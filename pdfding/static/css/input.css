@@ -213,3 +213,60 @@ form[action="/accountpassword/change/"] ul.errorlist {
         @apply border-l-2 border-primary pl-4 pt-3 pb-1 mb-2 rounded-r bg-slate-200 dark:bg-slate-600 creme:bg-creme-dark-light
     }
 }
+
+/* Mobile-first responsive design improvements */
+@media (max-width: 768px) {
+    /* Improve button spacing and size on mobile */
+    .button, button, [type='submit'], [type='button'] {
+        @apply py-3 px-4 text-sm min-h-[44px]
+    }
+    
+    /* Better form inputs for mobile */
+    .textarea, textarea, input {
+        @apply py-3 px-4 text-base min-h-[44px]
+    }
+    
+    /* Improve card layouts on mobile */
+    .grid {
+        @apply gap-3
+    }
+    
+    /* Better spacing for mobile */
+    h1 {
+        @apply text-2xl mb-3
+    }
+    
+    h2 {
+        @apply text-lg mb-2
+    }
+}
+
+@media (max-width: 480px) {
+    /* Extra small screens */
+    .button, button, [type='submit'], [type='button'] {
+        @apply w-full mb-2
+    }
+    
+    /* Stack elements vertically on very small screens */
+    .flex {
+        @apply flex-col space-y-2
+    }
+    
+    .flex.flex-row {
+        @apply flex-row space-y-0 space-x-2
+    }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+    /* Larger touch targets */
+    .button, button, [type='submit'], [type='button'], 
+    input[type="checkbox"], input[type="radio"] {
+        @apply min-h-[44px] min-w-[44px]
+    }
+    
+    /* Remove hover effects on touch devices */
+    .button:hover, button:hover, [type='submit']:hover, [type='button']:hover {
+        @apply transform-none
+    }
+}
