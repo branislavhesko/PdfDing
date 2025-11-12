@@ -82,7 +82,7 @@ class UsersE2ETestCase(PdfDingE2ETestCase):
 
             # check email address before changing
             expect(self.page.locator('#email_address')).to_contain_text('a@a.com')
-            expect(self.page.locator('content')).to_contain_text('Verified')
+            expect(self.page.locator('body')).to_contain_text('Verified')
 
             # change email address
             self.page.locator('#email_edit').click()
@@ -93,7 +93,7 @@ class UsersE2ETestCase(PdfDingE2ETestCase):
 
             # check email address after changing
             expect(self.page.locator('#email_address')).to_contain_text('a@b.com')
-            expect(self.page.locator('content')).to_contain_text('Not verified')
+            expect(self.page.locator('body')).to_contain_text('Not verified')
 
     def test_settings_change_custom_color(self):
         with sync_playwright() as p:
@@ -112,7 +112,7 @@ class UsersE2ETestCase(PdfDingE2ETestCase):
 
     def test_settings_change_inverted_pdf(self):
         with sync_playwright() as p:
-            self.open(reverse('ui_settings'), p)
+            self.open(reverse('viewer_settings'), p)
 
             # check inverted color mode before changing
             expect(self.page.locator("#pdf_inverted_mode")).to_contain_text("Disabled")
@@ -125,19 +125,31 @@ class UsersE2ETestCase(PdfDingE2ETestCase):
             # check inverted color mode after changing
             expect(self.page.locator("#pdf_inverted_mode")).to_contain_text("Enabled")
 
+    def test_settings_change_keep_awake(self):
+        with sync_playwright() as p:
+            self.open(reverse('viewer_settings'), p)
+
+            # check inverted color mode before changing
+            expect(self.page.locator("#pdf_keep_screen_awake")).to_contain_text("Disabled")
+
+            # change inverted color mode
+            self.page.locator("#pdf_keep_screen_awake_edit").click()
+            self.page.locator("#id_pdf_keep_screen_awake").select_option("Enabled")
+            self.page.get_by_role("button", name="Submit").click()
+
+            # check inverted color mode after changing
+            expect(self.page.locator("#pdf_keep_screen_awake")).to_contain_text("Enabled")
+
     def test_settings_change_show_progress_bars(self):
         with sync_playwright() as p:
             self.open(reverse('ui_settings'), p)
 
-            # check inverted color mode before changing
             expect(self.page.locator("#show_progress_bars")).to_contain_text("Enabled")
 
-            # change inverted color mode
             self.page.locator("#show_progress_bars_edit").click()
             self.page.locator("#id_show_progress_bars").select_option("Disabled")
             self.page.get_by_role("button", name="Submit").click()
 
-            # check inverted color mode after changing
             expect(self.page.locator("#show_progress_bars")).to_contain_text("Disabled")
 
     def test_settings_delete(self):
@@ -162,7 +174,17 @@ class UsersE2ETestCase(PdfDingE2ETestCase):
         with sync_playwright() as p:
             self.open(reverse('ui_settings'), p)
 
-            for name in ['#theme_edit', '#theme_color_edit', '#custom_theme_color_edit', '#pdf_inverted_mode_edit']:
+            for name in ['#theme_edit', '#theme_color_edit', '#custom_theme_color_edit', '#show_progress_bars_edit']:
+                self.page.locator(name).click()
+                expect(self.page.locator(name)).to_contain_text('Cancel')
+                self.page.get_by_text("Cancel").click()
+                expect(self.page.locator(name)).to_contain_text('Edit')
+
+    def test_settings_edit_cancel_viewer_settings(self):
+        with sync_playwright() as p:
+            self.open(reverse('viewer_settings'), p)
+
+            for name in ['#pdf_inverted_mode_edit', '#pdf_keep_screen_awake_edit']:
                 self.page.locator(name).click()
                 expect(self.page.locator(name)).to_contain_text('Cancel')
                 self.page.get_by_text("Cancel").click()
@@ -276,3 +298,19 @@ class UsersLoginE2ETestCase(PdfDingE2ENoLoginTestCase):
             expect(self.page.locator("#demo_user")).to_contain_text(
                 f"You can log into your temporary account with: {email} / demo"
             )
+
+
+class SupportEditionE2ETestCase(PdfDingE2ETestCase):
+    @override_settings(SUPPORTER_EDITION=True)
+    def test_supporter_edition_sidebar(self):
+        with sync_playwright() as p:
+            self.open(reverse('home'), p)
+            expect(self.page.locator("#sponsor")).not_to_be_visible()
+            expect(self.page.locator("#supporter")).to_be_visible()
+
+    @override_settings(SUPPORTER_EDITION=False)
+    def test_not_supporter_edition_sidebar(self):
+        with sync_playwright() as p:
+            self.open(reverse('home'), p)
+            expect(self.page.locator("#sponsor")).to_be_visible()
+            expect(self.page.locator("#supporter")).not_to_be_visible()

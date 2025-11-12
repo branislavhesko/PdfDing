@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 from unittest.mock import patch
@@ -335,6 +335,7 @@ class TestOverviewMixin(TestCase):
         filtered_pdfs = pdf_views.OverviewMixin.fuzzy_filter_pdfs(Pdf.objects.all(), 'self hosted')
         self.assertEqual(sorted(list(filtered_pdfs), key=lambda a: a.name), [pdf_self_hosting, pdf_self_hosted])
 
+    @override_settings(SUPPORTER_EDITION=True)
     @patch('pdf.service.TagServices.get_tag_info_dict', return_value='tag_info_dict')
     def test_get_extra_context(self, mock_get_tag_info_dict):
         response = self.client.get(f'{reverse('pdf_overview')}?search=searching&tags=tagging')
@@ -347,10 +348,12 @@ class TestOverviewMixin(TestCase):
             'special_pdf_selection': '',
             'page': 'pdf_overview',
             'layout': 'Compact',
+            'needs_nagging': False,
         }
 
         self.assertEqual(generated_extra_context, expected_extra_context)
 
+    @override_settings(SUPPORTER_EDITION=True)
     @patch('pdf.service.TagServices.get_tag_info_dict', return_value='tag_info_dict')
     def test_get_extra_context_selection(self, mock_get_tag_info_dict):
         response = self.client.get(f'{reverse('pdf_overview')}?selection=starred')
@@ -363,10 +366,12 @@ class TestOverviewMixin(TestCase):
             'special_pdf_selection': 'starred',
             'page': 'pdf_overview_starred',
             'layout': 'Compact',
+            'needs_nagging': False,
         }
 
         self.assertEqual(generated_extra_context, expected_extra_context)
 
+    @override_settings(SUPPORTER_EDITION=True)
     @patch('pdf.service.TagServices.get_tag_info_dict', return_value='tag_info_dict')
     def test_get_extra_context_selection_invalid(self, mock_get_tag_info_dict):
         response = self.client.get(f'{reverse('pdf_overview')}?selection=invalid')
@@ -379,10 +384,12 @@ class TestOverviewMixin(TestCase):
             'special_pdf_selection': '',
             'page': 'pdf_overview',
             'layout': 'Compact',
+            'needs_nagging': False,
         }
 
         self.assertEqual(generated_extra_context, expected_extra_context)
 
+    @override_settings(SUPPORTER_EDITION=True)
     @patch('pdf.service.TagServices.get_tag_info_dict', return_value='tag_info_dict')
     def test_get_extra_context_empty_queries(self, mock_get_tag_info_dict):
         response = self.client.get(reverse('pdf_overview'))
@@ -395,9 +402,39 @@ class TestOverviewMixin(TestCase):
             'special_pdf_selection': '',
             'page': 'pdf_overview',
             'layout': 'Compact',
+            'needs_nagging': False,
         }
 
         self.assertEqual(generated_extra_context, expected_extra_context)
+
+    @override_settings(SUPPORTER_EDITION=False)
+    def test_do_extra_action_reset(self):
+        self.user.profile.last_time_nagged = datetime.now(tz=timezone.utc) - timedelta(weeks=9)
+        self.user.profile.save()
+
+        self.assertTrue(self.user.profile.needs_nagging)
+
+        self.client.get(reverse('pdf_overview'))
+
+        changed_user = User.objects.get(id=self.user.id)
+
+        self.assertFalse(changed_user.profile.needs_nagging)
+        self.assertTrue((changed_user.profile.last_time_nagged - datetime.now(tz=timezone.utc)) < timedelta(minutes=1))
+
+    @override_settings(SUPPORTER_EDITION=False)
+    def test_do_extra_action_no_reset(self):
+        current_datetime = datetime.now(tz=timezone.utc) - timedelta(weeks=6)
+        self.user.profile.last_time_nagged = current_datetime
+        self.user.profile.save()
+
+        self.assertFalse(self.user.profile.needs_nagging)
+
+        self.client.get(reverse('pdf_overview'))
+
+        changed_user = User.objects.get(id=self.user.id)
+
+        self.assertFalse(changed_user.profile.needs_nagging)
+        self.assertEqual(changed_user.profile.last_time_nagged, current_datetime)
 
 
 class TestPdfMixin(TestCase):
@@ -508,15 +545,9 @@ class TestViews(TestCase):
         self.user = None
         set_up(self)
 
-    @patch('pdf.views.pdf_views.get_viewer_colors')
-    def test_view_get(self, mock_get_viewer_colors):
-        mock_colors_dict = {
-            'primary_color': '1 1 1',
-            'secondary_color': '2 2 2',
-            'text_color': '3 3 3',
-            'theme_color': '4 4 4',
-        }
-        mock_get_viewer_colors.return_value = mock_colors_dict
+    @patch('pdf.views.pdf_views.get_viewer_theme_and_color')
+    def test_view_get(self, mock_get_viewer_theme_and_color):
+        mock_get_viewer_theme_and_color.return_value = ('dark', '4 4 4')
 
         pdf = Pdf.objects.create(owner=self.user.profile, name='pdf')
         pdf.current_page = 4
@@ -537,11 +568,10 @@ class TestViews(TestCase):
         self.assertEqual(response.context['tab_title'], str(pdf.name))
         self.assertEqual(response.context['current_page'], 4)
         self.assertEqual(response.context['revision'], 3)
-        self.assertEqual(response.context['primary_color'], mock_colors_dict['primary_color'])
-        self.assertEqual(response.context['secondary_color'], mock_colors_dict['secondary_color'])
-        self.assertEqual(response.context['text_color'], mock_colors_dict['text_color'])
-        self.assertEqual(response.context['theme_color'], mock_colors_dict['theme_color'])
+        self.assertEqual(response.context['theme'], 'dark')
+        self.assertEqual(response.context['theme_color'], '4 4 4')
         self.assertEqual(response.context['user_view_bool'], True)
+        self.assertEqual(response.context['keep_screen_awake'], 'Disabled')
 
     def test_view_get_different_page(self):
         # in this test we are just interested if the current_page is set to the value specified by the query.

@@ -1,3 +1,5 @@
+version: "3"
+
 services:
   pdfding:
     container_name: pdfding
@@ -9,14 +11,10 @@ services:
     volumes:
       - sqlite_data:/home/nonroot/pdfding/db
       - media:/home/nonroot/pdfding/media
-      # If you use selinux it might be necessary to add the :Z after the volume
-      # - sqlite_data:/home/nonroot/pdfding/db:Z
-      # - media:/home/nonroot/pdfding/media:Z
     environment:
       - DEFAULT_THEME=${DEFAULT_THEME:-dark}
       - DEFAULT_THEME_COLOR=${DEFAULT_THEME_COLOR:-blue}
-      # use a long random secret
-      - SECRET_KEY=${SECRET_KEY:-whos_gone_save_the_world}
+      - SECRET_KEY=${SECRET_KEY:-some_long_random_secret}
       # the domain where you want to access PdfDing, e.g. pdfding.com
       - HOST_NAME=${HOST_NAME:-pdf.hesko.space, pdf.hesko.ai}
       # In production set the following values to True

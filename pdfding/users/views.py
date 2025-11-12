@@ -1,7 +1,8 @@
+import json
 from random import randint
 from uuid import uuid4
 
-from allauth.account.utils import send_email_confirmation
+from allauth.account.internal.flows.email_verification import send_verification_email_for_user
 from allauth.account.views import LoginView, PasswordResetDoneView, PasswordResetView, SignupView
 from allauth.socialaccount.providers.openid_connect.views import callback, login
 from django.conf import settings as django_settings
@@ -10,7 +11,7 @@ from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -37,6 +38,13 @@ def ui_settings(request):  # pragma: no cover
     return render(request, 'ui_settings.html')
 
 
+def viewer_settings(request):  # pragma: no cover
+    """View for the viewer settings page"""
+
+    # pragma: no cover
+    return render(request, 'viewer_settings.html')
+
+
 def danger_settings(request):  # pragma: no cover
     """View for the danger settings page"""
 
@@ -52,6 +60,7 @@ class ChangeSetting(View):
         'theme': forms.create_user_field_form(['dark_mode']),
         'theme_color': forms.create_user_field_form(['theme_color']),
         'pdf_inverted_mode': forms.create_user_field_form(['pdf_inverted_mode']),
+        'pdf_keep_screen_awake': forms.create_user_field_form(['pdf_keep_screen_awake']),
         'custom_theme_color': forms.CustomThemeColorForm,
         'show_progress_bars': forms.create_user_field_form(['show_progress_bars']),
     }
@@ -65,6 +74,7 @@ class ChangeSetting(View):
             'theme_color': {'theme_color': request.user.profile.theme_color},
             'custom_theme_color': {'custom_theme_color': request.user.profile.custom_theme_color},
             'pdf_inverted_mode': {'pdf_inverted_mode': request.user.profile.pdf_inverted_mode},
+            'pdf_keep_screen_awake': {'pdf_keep_screen_awake': request.user.profile.pdf_keep_screen_awake},
             'show_progress_bars': {'show_progress_bars': request.user.profile.show_progress_bars},
         }
 
@@ -100,7 +110,7 @@ class ChangeSetting(View):
                 form.save()
 
                 # Then send confirmation email
-                send_email_confirmation(request, request.user)
+                send_verification_email_for_user(request, request.user)
             elif field_name == 'custom_theme_color':
                 form.save()
 
@@ -185,8 +195,8 @@ class OpenCollapseTags(View):
     def post(self, request: HttpRequest):
         """Open or collapse the tags in the pdf overview"""
 
-        if request.htmx:
-            user_profile = request.user.profile
+        if request.htmx:  # type: ignore
+            user_profile = request.user.profile  # type: ignore
             user_profile.tags_open = not user_profile.tags_open
 
             user_profile.save()
@@ -194,6 +204,36 @@ class OpenCollapseTags(View):
             return HttpResponseClientRefresh()
 
         return redirect('account_settings')
+
+
+class Signatures(View):
+    """View for gettings and setting signatures"""
+
+    def get(self, request: HttpRequest):
+        user_profile = request.user.profile  # type: ignore
+
+        return JsonResponse(user_profile.signatures)
+
+    def post(self, request: HttpRequest):
+        user_profile = request.user.profile  # type: ignore
+
+        viewer_current_signatures = request.POST.get('current_signatures')
+        viewer_previous_signatures = request.POST.get('previous_signatures')
+        viewer_current_signatures = json.loads(viewer_current_signatures)  # type: ignore
+        viewer_previous_signatures = json.loads(viewer_previous_signatures)  # type: ignore
+
+        signatures_to_be_removed = [sig for sig in viewer_previous_signatures if sig not in viewer_current_signatures]
+        signatures_to_be_added = [sig for sig in viewer_current_signatures if sig not in viewer_previous_signatures]
+
+        for sig in signatures_to_be_removed:
+            user_profile.signatures.pop(sig, None)
+
+        for sig in signatures_to_be_added:
+            user_profile.signatures[sig] = viewer_current_signatures[sig]
+
+        user_profile.save()
+
+        return HttpResponse(status=201)
 
 
 class Delete(View):
@@ -207,7 +247,7 @@ class Delete(View):
     def post(self, request: HttpRequest):
         """Delete the user"""
 
-        user = request.user
+        user = request.user  # type: ignore
 
         logout(request)
         user.delete()

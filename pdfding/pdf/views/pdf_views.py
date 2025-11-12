@@ -16,7 +16,7 @@ from pdf.models import Pdf, PdfComment, PdfHighlight, Tag, Folder
 from pdf.service import PdfProcessingServices
 from rapidfuzz import fuzz, utils
 from users.models import Profile
-from users.service import get_demo_pdf, get_viewer_colors
+from users.service import get_demo_pdf, get_viewer_theme_and_color
 
 
 class BasePdfMixin:
@@ -227,12 +227,13 @@ class OverviewMixin(BasePdfMixin):
         folders = Folder.objects.filter(owner=request.user.profile).select_related('parent')
 
         extra_context = {
+            'layout': request.user.profile.layout,
+            'needs_nagging': request.user.profile.needs_nagging,
+            'page': page,
             'search_query': request.GET.get('search', ''),
-            'tag_query': tag_query,
             'special_pdf_selection': special_pdf_selection,
             'tag_info_dict': service.TagServices.get_tag_info_dict(request.user.profile),
-            'page': page,
-            'layout': request.user.profile.layout,
+            'tag_query': tag_query,
             'current_folder': current_folder,
             'current_folder_id': current_folder_id,
             'folders': folders,
@@ -492,7 +493,7 @@ class ViewerView(PdfMixin, View):
         pdf.last_viewed_date = datetime.now(timezone.utc)
         pdf.save()
 
-        color_dict = get_viewer_colors(request.user.profile)
+        theme, theme_color = get_viewer_theme_and_color(request.user.profile)
 
         page = request.GET.get('page')
 
@@ -509,11 +510,10 @@ class ViewerView(PdfMixin, View):
                 'pdf_id': identifier,
                 'revision': pdf.revision,
                 'tab_title': pdf.name,
-                'theme_color': color_dict['theme_color'],
-                'primary_color': color_dict['primary_color'],
-                'secondary_color': color_dict['secondary_color'],
-                'text_color': color_dict['text_color'],
+                'theme': theme,
+                'theme_color': theme_color,
                 'user_view_bool': True,
+                'keep_screen_awake': request.user.profile.pdf_keep_screen_awake,
             },
         )
 
@@ -586,6 +586,15 @@ class Overview(OverviewMixin, base_views.BaseOverview):
     View for the PDF overview page. This view performs the searching and sorting of the PDFs. It's also responsible for
     paginating the PDFs.
     """
+
+    def do_extra_action(self, request: HttpRequest):
+        """When nagging modal is shown, set last time nagged to current datetime"""
+
+        profile = request.user.profile
+
+        if profile.needs_nagging:
+            profile.last_time_nagged = datetime.now(tz=timezone.utc)
+            profile.save()
 
 
 class OverviewQuery(BasePdfMixin, base_views.BaseOverviewQuery):

@@ -34,442 +34,106 @@ See https://github.com/adobe-type-tools/cmap-resources
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <meta name="google" content="notranslate">
-    <!-- do not change ./../static as it will break the viewer in the prod container -->
-    <script src="../../static/pdfjs/build/pdf.mjs" type="module"></script>
+    {# do not change ./../static as it will break the viewer in the prod container #}
     <link rel="stylesheet" href="../../static/pdfjs/web/viewer.css">
+    <link rel="stylesheet" href="{% static 'css/pdf_viewer.css' %}">
     <link rel="icon" type="image/x-icon" href="{% static 'images/logo_with_circle.svg' %}">
-    <script src="../../static/pdfjs/web/viewer.mjs" type="module"></script>
-    <script>
-      // get the start page
-      var page_number = {{ current_page }};
-
-      // open pdf on the start page
-      window.addEventListener('load', function() {
-          PDFViewerApplication.initialBookmark = "page="+page_number;
-          {% if user_view_bool %}
-          PDFViewerApplication.open({ url: "{% url 'serve_pdf' pdf_id revision %}" });
-          {% else %}
-          PDFViewerApplication.open({ url: "{% url 'serve_shared_pdf' shared_pdf_id revision %}" });
-          {% endif %}
-          // overwrite setTitle so that PdfDing controls the tab's title
-          PDFViewerApplication.setTitle = function set_new_title(new_title) {
-            const editorIndicator = this._hasAnnotationEditors;
-            document.title = `${editorIndicator ? "* " : ""}${"{{ tab_title }}"}`;
-          }
-      });
-
-      // set properties
-      document.addEventListener("webviewerloaded", () => {
-        PDFViewerApplicationOptions.set('disablePreferences', true); // needed otherwise settings are not overwritten
-        PDFViewerApplicationOptions.set('disableHistory', true); // disable browsing history, clicking on chapters does not open new page
-        PDFViewerApplicationOptions.set('viewOnLoad', 1  ); // disable remembering page
-        PDFViewerApplicationOptions.set("workerSrc", "../../static/pdfjs/build/pdf.worker.mjs");
-      });
-
-      {% if user_view_bool %}
-      // check every 3 seconds if remote page needs updating
-      setInterval(update_remote_page, 3000);
-
-      // function for updating the remote page
-      function update_remote_page() {
-        if (PDFViewerApplication.pdfViewer.currentPageNumber != page_number) {
-          page_number = PDFViewerApplication.pdfViewer.currentPageNumber;
-          set_current_page(page_number);
-        }
-      }
-      {% endif %}
-
-      function set_current_page(current_page) {
-        var form_data = new FormData();
-        form_data.append('pdf_id', '{{ pdf_id }}')
-        form_data.append('current_page', current_page)
-
-        fetch("{% url 'update_page'%}", {
-          method: "POST",
-          body: form_data,
-          headers: {
-            'X-CSRFToken': '{{ csrf_token }}',
-          },
-        });
-      }
-
-      // Mobile swipe gestures for page navigation
-      document.addEventListener('DOMContentLoaded', function() {
-        const viewerContainer = document.getElementById('viewerContainer');
-        let startX = null;
-        let startY = null;
-        const threshold = 50; // Minimum swipe distance
-        
-        function handleTouchStart(e) {
-          const touch = e.touches[0];
-          startX = touch.clientX;
-          startY = touch.clientY;
-        }
-        
-        function handleTouchEnd(e) {
-          if (!startX || !startY) return;
-          
-          const touch = e.changedTouches[0];
-          const deltaX = touch.clientX - startX;
-          const deltaY = touch.clientY - startY;
-          
-          // Only trigger if horizontal swipe is larger than vertical
-          if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > threshold) {
-            if (deltaX > 0) {
-              // Swipe right - previous page
-              PDFViewerApplication.pdfViewer.previousPage();
-            } else {
-              // Swipe left - next page
-              PDFViewerApplication.pdfViewer.nextPage();
-            }
-          }
-          
-          startX = null;
-          startY = null;
-        }
-        
-        if (viewerContainer) {
-          viewerContainer.addEventListener('touchstart', handleTouchStart, {passive: true});
-          viewerContainer.addEventListener('touchend', handleTouchEnd, {passive: true});
-        }
-        
-        // Mobile-specific PDF.js optimizations
-        document.addEventListener("webviewerloaded", () => {
-          // Enable touch navigation
-          PDFViewerApplicationOptions.set('enableWebGL', false); // Better mobile performance
-          PDFViewerApplicationOptions.set('useOnlyCssZoom', true); // Smoother zoom on mobile
-          
-          // Auto-fit on mobile devices
-          if (window.innerWidth <= 768) {
-            PDFViewerApplicationOptions.set('defaultZoomValue', 'page-fit');
-          }
-        });
-      });
-
-      {% if user_view_bool %}
-      // send file via the fetch api to the backend
-      function send_pdf_file(file) {
-        var form_data = new FormData();
-        form_data.append('updated_pdf', file);
-        form_data.append('pdf_id', '{{ pdf_id }}')
-
-        fetch("{% url 'update_pdf'%}", {
-          method: "POST",
-          body: form_data,
-          headers: {
-            'X-CSRFToken': '{{ csrf_token }}',
-          },
-        });
-      }
-
-      // function for updating the pdf file in the backend
-      async function update_pdf() {
-        if (PDFViewerApplication._saveInProgress) {
-          return;
-        }
-        PDFViewerApplication._saveInProgress = true;
-        await PDFViewerApplication.pdfScriptingManager.dispatchWillSave();
-
-        try {
-          const data = await PDFViewerApplication.pdfDocument.saveDocument();
-          const updated_pdf = new Blob([data], {type: "application/pdf"});
-          send_pdf_file(updated_pdf);
-          PDFViewerApplication._hasAnnotationEditors = false;
-          // removes "*" from the tab title in order to signal that the file was successfully saved
-          PDFViewerApplication.setTitle("{{ tab_title }}");
-        } catch (reason) {
-          console.error(`Error when saving the document: ${reason.message}`);
-        } finally {
-          await PDFViewerApplication.pdfScriptingManager.dispatchDidSave();
-          PDFViewerApplication._saveInProgress = false;
-        }
-      }
-      {% endif %}
-    </script>
     <style>
-      /* Enhanced mobile responsiveness */
-      @media all and (max-width: 900px){
-        #outerContainer .hiddenMediumView{
-          display:none !important;
-        }
-        #outerContainer .visibleMediumView:not(.hidden, [hidden]){
-          display:inline-block !important;
-        }
-        
-        /* Improve sidebar on tablets */
-        #sidebarContainer {
-          width: 280px !important;
-        }
-        
-        /* Better toolbar spacing */
-        #toolbarViewer {
-          padding: 0 8px !important;
-        }
-      }
-      
-      @media all and (max-width: 750px){
-        .hiddenSmallView,
-        .hiddenSmallView *{
-          display:none !important;
-        }
-        #toolbarContainer #toolbarViewer .toolbarButtonSpacer{
-          width:0;
-        }
-        
-        /* Mobile-specific improvements */
-        #sidebarContainer {
-          width: 250px !important;
-        }
-        
-        #toolbarViewer {
-          padding: 0 4px !important;
-          min-height: 44px !important; /* Touch-friendly height */
-        }
-        
-        /* Larger touch targets for mobile */
-        .toolbarButton {
-          min-width: 44px !important;
-          min-height: 44px !important;
-          padding: 8px !important;
-        }
-        
-        /* Better zoom controls for mobile */
-        #scaleSelect {
-          min-height: 40px !important;
-          font-size: 14px !important;
-        }
-        
-        /* Page number input improvements */
-        #pageNumber {
-          min-height: 40px !important;
-          min-width: 60px !important;
-          font-size: 16px !important; /* Prevent zoom on iOS */
-          text-align: center !important;
-        }
-      }
-      
-      @media all and (max-width: 480px){
-        /* Extra small mobile devices */
-        #sidebarContainer {
-          width: 200px !important;
-        }
-        
-        #toolbarViewer {
-          flex-wrap: wrap !important;
-          gap: 4px !important;
-        }
-        
-        /* Stack toolbar elements on very small screens */
-        #toolbarViewerMiddle {
-          order: 3 !important;
-          width: 100% !important;
-          justify-content: center !important;
-          margin-top: 4px !important;
-        }
-        
-        /* Compact page navigation */
-        #pageNumber {
-          min-width: 50px !important;
-        }
-        
-        #numPages {
-          font-size: 12px !important;
-        }
-      }
-      
-      /* Touch improvements for all mobile devices */
-      @media (hover: none) and (pointer: coarse) {
-        /* Increase tap targets */
-        .toolbarButton, button {
-          min-height: 44px !important;
-          min-width: 44px !important;
-        }
-        
-        /* Better scroll behavior */
-        #viewerContainer {
-          -webkit-overflow-scrolling: touch !important;
-          scroll-behavior: smooth !important;
-        }
-        
-        /* Prevent zoom on double tap */
-        #viewer {
-          touch-action: pan-x pan-y !important;
-        }
-      }
-      select:hover option:hover {
-          background-color: red !important;
-          color: white !important;
-      }
       :root{
-        /* elements using the primary color */
-        --body-bg-color:rgb({{ primary_color }}); /* background around pdf, sets also sidebar color!*/
-        --sidebar-narrow-bg-color:rgb({{ primary_color }}); /* sidebar background around pdf mobile*/
-        --treeitem-bg-color:rgb({{ primary_color }});   ;  /* table of contents bg color */
-        --treeitem-selected-bg-color:rgb({{ primary_color }});  /* table of contents selected bg color */
-        --scrollbar-bg-color:rgb({{ primary_color }});  /* scrollbar background color */
-        --toolbar-border-color:rgb({{ primary_color }});  /* toolbar border color */
-        --progressBar-bg-color:rgb({{ primary_color }});  /* progressbar background color */
-        /* elements using the secondary color */
-        --field-bg-color:rgb({{ secondary_color }});  /* input field bg color */
-        --toolbar-bg-color:rgb({{ secondary_color }});  /* toolbar color */
-        --dropdown-btn-bg-color:rgb({{ secondary_color }});  /* dropdown button color */
-        --sidebar-toolbar-bg-color:rgb({{ secondary_color }});  /* sidebar toolbar bg color */
-        /* elements using the text color */
-        --main-color:rgb({{ text_color }});   /* main text */
-        --toolbar-icon-bg-color:rgb({{ text_color }});  /* toolbar icon image color */
-        --field-color:rgb({{ text_color }});  /* input field text color */
-        --treeitem-color:rgb({{ text_color }});  /* table of contents text color */
-        --field-border-color:rgb(115 115 115);  /* input field bordercolor */
-        /* buttons hover and selected color */
-        --toolbar-icon-hover-bg-color:rgb(226 232 240);  /* toolbar icon hover image color */
-        --dropdown-btn-hover-bg-color:rgb(226 232 240);  /* dropdown button hover color */
-        --toggled-btn-color:rgb(226 232 240);  /* toolbar icon selected color */
+
         /* elements using the theme color */
         --button-hover-color: rgb({{ theme_color }});  /* button hover */
-        --progressBar-color:rgb({{ theme_color }});  /* progressbar color */
-        --toggled-btn-bg-color:rgb({{ theme_color }} / 0.9);  /* dropdown toggled color */
-        --scrollbar-color:rgb({{ theme_color }});  /* scroll indicator color */
-        --treeitem-hover-color:rgb({{ theme_color }});  /* table of contents hover text color */
-        --treeitem-selected-color:rgb({{ theme_color }});  /* table of contents selected text color */
-        --thumbnail-hover-color:rgb({{ theme_color }} / 0.3);  /* thumbnail hover bg color */
-        --thumbnail-selected-color:rgb({{ theme_color }} / 0.7);  /* thumbnail selected bg color */
+        --progressBar-color: rgb({{ theme_color }});  /* progressbar color */
+        --toggled-btn-bg-color: rgb({{ theme_color }} / 0.9);  /* dropdown toggled color */
+        --scrollbar-color: rgb({{ theme_color }});  /* scroll indicator color */
+        --treeitem-hover-color: rgb({{ theme_color }});  /* table of contents hover text color */
+        --treeitem-selected-color: rgb({{ theme_color }});  /* table of contents selected text color */
+        --thumbnail-hover-color: rgb({{ theme_color }} / 0.3);  /* thumbnail hover bg color */
+        --thumbnail-selected-color: rgb({{ theme_color }} / 0.7);  /* thumbnail selected bg color */
+        --button-signature-hover-bg: rgb({{ theme_color }});
+        --signature-hover-bg: rgb({{ theme_color }});
       }
       .textLayer .highlight {
         --highlight-bg-color: rgb({{ theme_color }} / 0.2);  /* thumbnail hover bg color */
         --highlight-selected-bg-color: rgb({{ theme_color }} / 0.5);  /* thumbnail hover bg color */
       }
-      .button1 {
-        background-color:rgb({{ secondary_color }});
-        color:rgb({{ text_color }});
-        border-width: 0px;
-        margin: 2px 1px;
-        padding: 3px 4px 0;
-      }
       .button1:hover {
         background-color: rgb({{ theme_color }});
-        color: rgb(226 232 240);
-        border-radius: 2px
       }
       .pdfSidebarNotification::after {
         background-color: rgb({{ theme_color }});
       }
-      .doorHanger, .doorHangerRight {
-          background-color: rgb({{ secondary_color }});
-      }
-      dialog {
-          background-color: rgb({{ secondary_color }});
-      }
-      .editorParamsToolbarContainer {
-        background-color:rgb({{ secondary_color }});
-      }
-      .horizontalToolbarSeparator {
-        border-top: 1px solid rgb({{ text_color }});
-        opacity: 0.2;
-      }
-      .splitToolbarButtonSeparator{
-        border-left:1px solid rgb({{ text_color }});
-        opacity: 0.5
-      }
       .toolbarField:focus{
         border-color: rgb({{ theme_color }});
       }
-      <!-- right sidebar -->
-      .toolbarButton::before{
-        color: rgb({{ text_color }});
-      }
-      .toolbarButton.labeled:hover{
-        color: rgb({{ text_color }});
-      }
-      .toolbarButton.labeled:hover{
-        color: rgb({{ text_color }});
-      }
-      .toolbarButton.labeled::before {
-          background-color: rgb({{ text_color }});
-      }
-      .toolbarButton.toggled:hover{
-        color: rgb({{ text_color }});
-      }
-      .toolbarButton.toggled::before {
-          background-color: rgb({{ text_color }});
-      }
-      .toolbarButton.toggled {
-          color: rgb({{ text_color }});
-      }
-      .toolbarButton.toggled:hover{
-        color: rgb({{ text_color }});
-      }
       .logo {
-         width: 22px;
-         height: 22px;
          background: rgb({{ theme_color }});
-         border-radius: 50%;
-         opacity: 0.9;
-         padding: 3px;
-         margin: 0px 4px;
       }
-      .treeItemToggler::before {
-        background-color:rgb({{ text_color }});
+      #addSignatureDialog {
+        --tab-text-active-color: rgb({{ theme_color }});
+        --tab-top-line-active-color: rgb({{ theme_color }});
+        --tab-top-line-active-hover-color: rgb({{ theme_color }});
+        --tab-bg-hover: rgb({{ theme_color }});
+        --tab-bg-active-hover-color: rgb({{ theme_color }});
+        --button-primary-bg-color: rgb({{ theme_color }});
+        --button-primary-hover-bg-color: rgb({{ theme_color }} / 0.9);
+        --clear-signature-button-bg-hover: rgb({{ theme_color }});
       }
-      
-      /* Center PDF viewer on desktop while maintaining mobile support */
-      @media (min-width: 1024px) {
-        #outerContainer {
-          max-width: 1400px !important;
-          margin: 0 auto !important;
-          box-shadow: 0 0 20px rgba(0, 0, 0, 0.1) !important;
-        }
-        
-        body {
-          background-color: rgba({{ primary_color }}, 0.3) !important;
-        }
-      }
-      
-      @media (min-width: 1200px) {
-        #outerContainer {
-          max-width: 1600px !important;
-        }
-      }
-      
-      /* Ensure mobile responsiveness is preserved */
-      @media (max-width: 1023px) {
-        #outerContainer {
-          max-width: 100% !important;
-          margin: 0 !important;
-          box-shadow: none !important;
-        }
-        
-        body {
-          background-color: rgb({{ primary_color }}) !important;
-        }
-      }
-      
-      /* PDF page styling with black borders */
-      #viewerContainer > #viewer .page {
-        border: 1px solid #000000 !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-        margin: 8px !important;
-      }
-      
-      /* Center PDF viewer horizontally for all zoom levels */
-      #viewerContainer {
-        display: flex !important;
-        justify-content: center !important;
-      }
-      
-      #viewer {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-      }
-      
-      {% if request.user.profile.pdf_inverted_mode == 'Enabled' %}
-      #viewerContainer > #viewer .page {
-        filter: grayscale(100%);
-        filter: invert(80%);
-        border: 1px solid #ffffff !important; /* White border for inverted mode */
-      }
-      {% endif %}
     </style>
+    <script>
+      (function() {
+        const theme = '{{ theme }}';
+
+        if (theme === 'system') {
+          const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+          if (isSystemDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.add('light');
+          }
+
+          // Listen for system theme changes
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (event) => {
+            document.documentElement.classList.toggle('dark', event.matches);
+          });
+        } else {
+          document.documentElement.classList.add(theme);
+        }
+      })();
+    </script>
+    {# do not change ./../static as it will break the viewer in the prod container #}
+    <script src="../../static/pdfjs/build/pdf.mjs" type="module"></script>
+    <script src="../../static/pdfjs/web/viewer.mjs" type="module"></script>
+    <script src="{% static 'js/pdfding/viewer_base.js' %}" type="text/javascript"></script>
+    {% if user_view_bool %}
+    <script src="{% static 'js/pdfding/viewer_logged_in.js' %}" type="text/javascript"></script>
+    {% endif %}
+    <script>
+      {# get the start page #}
+      var page_number = {{ current_page }};
+
+      {% if user_view_bool %}
+      var url = "{% url 'serve_pdf' pdf_id revision %}"
+      {% else %}
+      var url = "{% url 'serve_shared_pdf' shared_pdf_id revision %}"
+      {% endif %}
+      start_viewer(page_number, url, "{{ tab_title }}");
+
+      {% if user_view_bool %}
+      get_remote_signatures("{% url 'signatures' %}");
+
+      {# check every 3 seconds if remote page needs updating #}
+      setInterval(update_remote_page, 3000, '{{ pdf_id }}', '{% url 'update_page' %}', '{{ csrf_token }}');
+
+      {# check every 5 seconds if remote signatures need updating #}
+      setInterval(update_remote_signatures, 5000, '{% url 'signatures' %}', '{{ csrf_token }}');
+
+      {% if keep_screen_awake == 'Enabled' %}
+      requestWakeLock();
+      {% endif %}
+      {% endif %}
+    </script>
   </head>
 
   <body>
@@ -578,7 +242,7 @@ See https://github.com/adobe-type-tools/cmap-resources
                   <span class="loadingInput start toolbarHorizontalGroup">
                     <input type="number" id="pageNumber" class="toolbarField" value="1" min="1" autocomplete="off">
                   </span>
-                  <span id="numPages" class="toolbarLabel"></span>
+                  <span id="numPages" class="toolbarLabel hiddenMiniView"></span>
                 </div>
               </div>
               <div id="toolbarViewerRight" class="toolbarHorizontalGroup">
@@ -589,7 +253,7 @@ See https://github.com/adobe-type-tools/cmap-resources
                 </div>
                 <div class="toolbarHorizontalGroup" >
                   {% if user_view_bool %}
-                  <button onclick="update_pdf()" class="button1" title="Save">
+                  <button onclick="update_pdf('{{ pdf_id }}', '{% url 'update_pdf'%}', '{{ csrf_token }}', '{{ tab_title }}')" class="button1" title="Save">
                     <svg width="20px" height="20px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
                       <!--Source: https://www.svgrepo.com/svg/502821/save-->
@@ -603,6 +267,18 @@ See https://github.com/adobe-type-tools/cmap-resources
                 </div>
                 {% if user_view_bool %}
                 <div id="editorModeButtons" class="toolbarHorizontalGroup" role="radiogroup">
+                  <div id="editorSignature" class="toolbarButtonWithContainer">
+                    <button id="editorSignatureButton" class="toolbarButton" type="button" title="Signature" tabindex="0" role="radio" aria-expanded="false" aria-haspopup="true" aria-controls="editorSignatureParamsToolbar">
+                      <span>Signature</span>
+                    </button>
+                    <div class="editorParamsToolbar hidden doorHangerRight menu" id="editorSignatureParamsToolbar">
+                      <div id="addSignatureDoorHanger" class="menuContainer" role="region" data-l10n-id="pdfjs-editor-add-signature-container">
+                        <button id="editorSignatureAddSignature" class="toolbarButton labeled" type="button" tabindex="0">
+                          <span class="editorParamsLabel">Add new signature</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   <div id="editorHighlight" class="toolbarButtonWithContainer">
                     <button id="editorHighlightButton" class="toolbarButton" type="button" title="Highlight">
                       <span>Highlight</span>
@@ -771,6 +447,96 @@ See https://github.com/adobe-type-tools/cmap-resources
             <button id="passwordSubmit" class="dialogButton" type="button"><span data-l10n-id="pdfjs-password-ok-button">OK</span></button>
           </div>
         </dialog>
+        <dialog class="dialog signatureDialog" id="addSignatureDialog" aria-labelledby="addSignatureDialogLabel">
+          <span id="addSignatureDialogLabel"></span>
+          <div id="addSignatureContainer" class="mainContainer">
+            <div class="title">
+              <span role="sectionhead" tabindex="0">Add a signature</span>
+            </div>
+            <div role="tablist" id="addSignatureOptions">
+              <button id="addSignatureTypeButton" type="button" role="tab" aria-selected="true" aria-controls="addSignatureTypeContainer" tabindex="0">Type</button>
+              <button id="addSignatureDrawButton" type="button" role="tab" aria-selected="false" aria-controls="addSignatureDrawContainer" tabindex="0">Draw</button>
+              <button id="addSignatureImageButton" type="button" role="tab" aria-selected="false" aria-controls="addSignatureImageContainer" tabindex="-1">Image</button>
+            </div>
+            <div id="addSignatureActionContainer" data-selected="type">
+              <div id="addSignatureTypeContainer" role="tabpanel" aria-labelledby="addSignatureTypeContainer">
+                <input id="addSignatureTypeInput" type="text" tabindex="0" placeholder="Type your signature"></input>
+              </div>
+              <div id="addSignatureDrawContainer" role="tabpanel" aria-labelledby="addSignatureDrawButton" tabindex="-1">
+                <svg id="addSignatureDraw" xmlns="http://www.w3.org/2000/svg" aria-labelledby="addSignatureDrawPlaceholder"></svg>
+                <span id="addSignatureDrawPlaceholder">Draw your signature</span>
+                <div id="thickness">
+                  <div>
+                    <label for="addSignatureDrawThickness">Thickness</label>
+                    <input type="range" id="addSignatureDrawThickness" min="1" max="5" step="1" value="1" data-l10n-id="pdfjs-editor-add-signature-draw-thickness-range" data-l10n-args='{ "thickness": 1 }' tabindex="0">
+                  </div>
+                </div>
+              </div>
+              <div id="addSignatureImageContainer" role="tabpanel" aria-labelledby="addSignatureImageButton" tabindex="-1">
+                <svg id="addSignatureImage" xmlns="http://www.w3.org/2000/svg" aria-labelledby="addSignatureImagePlaceholder"></svg>
+                <div id="addSignatureImagePlaceholder">
+                  <span>Drag a file here to upload</span>
+                  <label id="addSignatureImageBrowse" for="addSignatureFilePicker" tabindex="0">
+                    <a>Or browse image files</a>
+                  </label>
+                  <input id="addSignatureFilePicker" type="file"></input>
+                </div>
+              </div>
+              <div id="addSignatureControls">
+                <div id="horizontalContainer">
+                  <div id="addSignatureDescriptionContainer">
+                    <label for="addSignatureDescInput">Description (alt text)</label>
+                    <span id="addSignatureDescription" class="inputWithClearButton">
+                      <input id="addSignatureDescInput" type="text" tabindex="0"></input>
+                      <button class="clearInputButton" type="button" tabindex="0" aria-hidden="true"></button>
+                    </span>
+                  </div>
+                  <button id="clearSignatureButton" type="button" tabindex="0"><span>Clear signature</span></button>
+                </div>
+                <div id="addSignatureSaveContainer">
+                  <input type="checkbox" id="addSignatureSaveCheckbox"></input>
+                  <label for="addSignatureSaveCheckbox">Save Signature</label>
+                  <span></span>
+                  <span id="addSignatureSaveWarning" data-l10n-id="pdfjs-editor-add-signature-save-warning-message"></span>
+                </div>
+              </div>
+              <div id="addSignatureError" hidden="true" class="messageBar">
+                <div>
+                  <div>
+                    <span id="addSignatureErrorTitle" class="title" data-l10n-id="pdfjs-editor-add-signature-image-upload-error-title"></span>
+                    <span id="addSignatureErrorDescription" class="description" data-l10n-id="pdfjs-editor-add-signature-image-upload-error-description"></span>
+                  </div>
+                  <button id="addSignatureErrorCloseButton" class="closeButton" type="button" tabindex="0"><span data-l10n-id="pdfjs-editor-add-signature-error-close-button"></span></button>
+                </div>
+              </div>
+              <div class="dialogButtonsGroup">
+                <button id="addSignatureCancelButton" type="button" class="secondaryButton" tabindex="0"><span>Cancel</span></button>
+                <button id="addSignatureAddButton" type="button" class="primaryButton" disabled tabindex="0"><span>Add</span></button>
+              </div>
+            </div>
+          </div>
+        </dialog>
+        <dialog class="dialog signatureDialog" id="editSignatureDescriptionDialog" aria-labelledby="editSignatureDescriptionTitle">
+          <div id="editSignatureDescriptionContainer" class="mainContainer">
+            <div class="title">
+              <span id="editSignatureDescriptionTitle" role="sectionhead" data-l10n-id="pdfjs-editor-edit-signature-dialog-title" tabindex="0"></span>
+            </div>
+            <div id="editSignatureDescriptionAndView">
+              <div id="editSignatureDescriptionContainer">
+                <label for="editSignatureDescInput" data-l10n-id="pdfjs-editor-add-signature-description-label"></label>
+                <span id="editSignatureDescription" class="inputWithClearButton">
+                  <input id="editSignatureDescInput" type="text" data-l10n-id="pdfjs-editor-add-signature-description-input" tabindex="0"></input>
+                  <button class="clearInputButton" type="button" tabindex="0" aria-hidden="true"></button>
+                </span>
+              </div>
+              <svg id="editSignatureView" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+            <div class="dialogButtonsGroup">
+              <button id="editSignatureCancelButton" type="button" class="secondaryButton" tabindex="0"><span data-l10n-id="pdfjs-editor-add-signature-cancel-button"></span></button>
+              <button id="editSignatureUpdateButton" type="button" class="primaryButton" disabled tabindex="0"><span data-l10n-id="pdfjs-editor-edit-signature-update-button"></span></button>
+            </div>
+          </div>
+        </dialog>
         <dialog id="printServiceDialog" style="min-width: 200px;">
           <div class="row">
             <span>Preparing document for printing...</span>
@@ -806,6 +572,7 @@ See https://github.com/adobe-type-tools/cmap-resources
   <div id="editorFreeHighlightThickness"></div><div id="editorHighlightButton"></div>
   <div id="editorHighlightShowAll"></div><div id="editorInkButton"></div><div id="editorInkColor"></div>
   <div id="editorInkThickness"></div><div id="editorInkOpacity"></div>
+  <div id="editorSignatureAddSignature"></div><div id="editorSignatureButton"></div>
   {% endif %}
 
   <div id="viewAttachments"></div><div id="viewLayers"></div><div id="altTextSave"></div>
@@ -814,6 +581,6 @@ See https://github.com/adobe-type-tools/cmap-resources
   <div id="pageRotateCw"></div><div id="pageRotateCcw"></div><div id="documentProperties"></div>
   <div id="documentPropertiesDialog"></div><div id="documentPropertiesClose"></div><div id="presentationMode"></div>
   <div id="descriptionButton"></div><div id="decorativeButton"></div><div id="altTextCancel"></div>
-  <div id="editorSignatureAddSignature"></div><div id="editorSignatureButton"></div>
-  <div id="imageAltTextSettings"></div><div id="viewBookmark"></div>
+  <div id="imageAltTextSettings"></div><div id="viewBookmark"></div><div id="editorComment"></div>
+  <div id="editorCommentButton"></div>
 </html>
