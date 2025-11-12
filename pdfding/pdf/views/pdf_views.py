@@ -226,6 +226,9 @@ class OverviewMixin(BasePdfMixin):
 
         folders = Folder.objects.filter(owner=request.user.profile).select_related('parent')
 
+        # Count PDFs without a folder (root PDFs)
+        root_pdf_count = request.user.profile.pdf_set.filter(folder__isnull=True).count()
+
         extra_context = {
             'layout': request.user.profile.layout,
             'needs_nagging': request.user.profile.needs_nagging,
@@ -237,6 +240,7 @@ class OverviewMixin(BasePdfMixin):
             'current_folder': current_folder,
             'current_folder_id': current_folder_id,
             'folders': folders,
+            'root_pdf_count': root_pdf_count,
         }
 
         return extra_context

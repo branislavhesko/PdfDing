@@ -92,6 +92,31 @@
 
 {% block sidebar_extra_content %}
 {% if page == 'pdf_overview' or page == 'pdf_overview_starred' or page == 'pdf_overview_archived' %}
+<!-- Folders Section -->
+<div class="hidden md:block pt-6 mt-6 border-t border-slate-300 dark:border-slate-600 creme:border-stone-400 pb-2 pl-2">
+    <div class="flex flex-row items-center justify-between! w-full pb-2 font-semibold">
+        <div class="flex flex-row items-center gap-x-1">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Folder icon -->
+                <path d="M3 8H21M5 8V5C5 3.89543 5.89543 3 7 3H10.5858C10.851 3 11.1054 3.10536 11.2929 3.29289L13 5H19C20.1046 5 21 5.89543 21 7V18C21 19.1046 20.1046 20 19 20H5C3.89543 20 3 19.1046 3 18V8Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Folders</span>
+        </div>
+        <a href="{% url 'create_folder' %}"
+           class="text-slate-500! hover:text-black! dark:text-slate-300 dark:hover:text-white! creme:text-stone-400! creme:hover:text-stone-700!"
+           title="Create new folder">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </a>
+    </div>
+    <div class="hidden md:block pl-3 overflow-auto flex-grow
+                [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-gray-500 [&::-webkit-scrollbar-thumb]:bg-primary">
+        {% include 'includes/folders.html' %}
+    </div>
+</div>
+
+<!-- Tags Section -->
 <div class="hidden md:block md:flex md:flex-row items-center pt-6 mt-6
             border-t border-slate-300 dark:border-slate-600 creme:border-stone-400 gap-x-2 pb-2 pl-2 font-semibold">
     <div class="flex flex-row items-center justify-between! w-full">
