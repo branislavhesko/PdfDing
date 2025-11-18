@@ -234,3 +234,41 @@ dialog {
   filter: grayscale(100%);
   filter: invert(80%);
 }
+
+/* Add black border around PDF pages */
+#viewerContainer > #viewer .page {
+  border: 2px solid black !important;
+  box-shadow: 0 0 0 1px black !important;
+}
+
+/* Ensure border is visible in all contexts */
+.page {
+  border: 2px solid black !important;
+}
+
+/* Navigation buttons - make them more prominent and touch-friendly */
+#previous,
+#next {
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 8px !important;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+#previous:hover,
+#next:hover {
+  background-color: var(--button-hover-color) !important;
+}
+
+#previous:active,
+#next:active {
+  transform: scale(0.95);
+}
+
+/* Ensure navigation buttons are visible on all screen sizes */
+@media all and (max-width: 750px) {
+  #previous,
+  #next {
+    display: inline-block !important;
+  }
+}

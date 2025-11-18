@@ -522,6 +522,43 @@ class ViewerView(PdfMixin, View):
         )
 
 
+class MobileViewerView(PdfMixin, View):
+    """Mobile-optimized view for displaying PDF files on mobile devices."""
+
+    def get(self, request: HttpRequest, identifier: str):
+        """Display the PDF file in a mobile-optimized viewer"""
+
+        # increase view counter by 1
+        pdf = self.get_object(request, identifier)
+        pdf.views += 1
+        pdf.last_viewed_date = datetime.now(timezone.utc)
+        pdf.save()
+
+        theme, theme_color = get_viewer_theme_and_color(request.user.profile)
+
+        page = request.GET.get('page')
+
+        if page:
+            current_page = page
+        else:
+            current_page = pdf.current_page
+
+        return render(
+            request,
+            'viewer_mobile.html',
+            {
+                'current_page': current_page,
+                'pdf_id': identifier,
+                'revision': pdf.revision,
+                'tab_title': pdf.name,
+                'theme': theme,
+                'theme_color': theme_color,
+                'user_view_bool': True,
+                'keep_screen_awake': request.user.profile.pdf_keep_screen_awake,
+            },
+        )
+
+
 class GetNotes(PdfMixin, View):
     """View for getting a pdf's markdown notes as html, so it can be displayed via htmx."""
 

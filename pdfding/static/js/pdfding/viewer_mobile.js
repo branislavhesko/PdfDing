@@ -12,20 +12,40 @@
     menuOpen: false,
     findbarOpen: false,
     toolbarVisible: true,
+    readingMode: false,
+    readingModeExitVisible: false,
+    previousScale: null,
+    previousScrollMode: null,
     lastTap: 0,
     touchStartX: 0,
     touchStartY: 0,
+    touchStartTime: 0,
+    touchMoved: false,
+    isSwiping: false,
+    isPinching: false,
+    isPageMode: false,
     swipeThreshold: 50,
   };
 
   // ===== INITIALIZATION =====
   document.addEventListener('DOMContentLoaded', function() {
     initializeMobileControls();
-    initializeTouchGestures();
     initializeMobileMenu();
     initializeMobileSidebar();
     initializeMobileFindbar();
+    initializeReadingMode();
     setupAutoHideToolbar();
+
+    // Initialize touch gestures after a short delay to ensure PDF.js is ready
+    setTimeout(function() {
+      initializeTouchGestures();
+    }, 500);
+  });
+
+  // Also try to initialize when the PDF document is loaded
+  document.addEventListener('pagesloaded', function() {
+    console.log('Pages loaded, ensuring touch gestures are initialized');
+    initializeTouchGestures();
   });
 
   // ===== MOBILE CONTROLS =====
@@ -153,6 +173,13 @@
           mode: 13 // Stamp mode
         });
         closeMobileMenu();
+      },
+      'readingMode': () => {
+        closeMobileMenu();
+        // Small delay to allow menu to close smoothly
+        setTimeout(() => {
+          enterReadingMode();
+        }, 300);
       },
       'presentationMode': () => {
         PDFViewerApplication.requestPresentationMode();
@@ -351,19 +378,210 @@
     }
   }
 
-  // ===== TOUCH GESTURES =====
-  function initializeTouchGestures() {
-    const viewerContainer = document.getElementById('viewerContainer');
+  // ===== READING MODE (FULL-SCREEN) =====
+  function initializeReadingMode() {
+    const exitButton = document.getElementById('exitReadingMode');
+    const tapZoneLeft = document.getElementById('tapZoneLeft');
+    const tapZoneRight = document.getElementById('tapZoneRight');
+    const tapZoneCenter = document.getElementById('tapZoneCenter');
 
-    if (viewerContainer) {
-      // Swipe gestures for page navigation
-      viewerContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
-      viewerContainer.addEventListener('touchend', handleTouchEnd, { passive: true });
+    // Exit button handler
+    if (exitButton) {
+      exitButton.addEventListener('click', () => {
+        exitReadingMode();
+      });
+    }
+
+    // Tap zone handlers
+    if (tapZoneLeft) {
+      tapZoneLeft.addEventListener('click', () => {
+        if (mobileUI.readingMode) {
+          navigateReadingModePage(-1);
+        }
+      });
+    }
+
+    if (tapZoneRight) {
+      tapZoneRight.addEventListener('click', () => {
+        if (mobileUI.readingMode) {
+          navigateReadingModePage(1);
+        }
+      });
+    }
+
+    if (tapZoneCenter) {
+      tapZoneCenter.addEventListener('click', () => {
+        if (mobileUI.readingMode) {
+          toggleReadingModeControls();
+        }
+      });
+    }
+
+    // Listen for page changes to update indicator
+    document.addEventListener('pagechanging', updateReadingModeIndicator);
+  }
+
+  function enterReadingMode() {
+    if (mobileUI.readingMode) return;
+
+    // Close any open panels
+    closeMobileSidebar();
+    closeMobileFindbar();
+
+    // Save current viewer state
+    mobileUI.previousScale = PDFViewerApplication.pdfViewer.currentScaleValue;
+    mobileUI.previousScrollMode = PDFViewerApplication.pdfViewer.scrollMode;
+
+    // Apply reading mode class to body
+    document.body.classList.add('reading-mode-active');
+    mobileUI.readingMode = true;
+
+    // Set optimal viewing mode for reading
+    // ScrollMode 3 = PAGE mode (one page at a time)
+    PDFViewerApplication.pdfViewer.scrollMode = 3;
+
+    // Set scale to fit page
+    PDFViewerApplication.pdfViewer.currentScaleValue = 'page-fit';
+
+    // Show exit button
+    showReadingModeControls();
+
+    // Update page indicator
+    updateReadingModeIndicator();
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+  }
+
+  function exitReadingMode() {
+    if (!mobileUI.readingMode) return;
+
+    // Remove reading mode class
+    document.body.classList.remove('reading-mode-active');
+    mobileUI.readingMode = false;
+
+    // Hide controls
+    hideReadingModeControls();
+
+    // Restore previous viewer state
+    if (mobileUI.previousScale !== null) {
+      PDFViewerApplication.pdfViewer.currentScaleValue = mobileUI.previousScale;
+    }
+    if (mobileUI.previousScrollMode !== null) {
+      PDFViewerApplication.pdfViewer.scrollMode = mobileUI.previousScrollMode;
+    }
+
+    // Restore body scroll
+    document.body.style.overflow = '';
+
+    // Update navigation buttons
+    updateNavigationButtons();
+  }
+
+  function navigateReadingModePage(direction) {
+    if (!PDFViewerApplication.pdfDocument) return;
+
+    const currentPage = PDFViewerApplication.pdfViewer.currentPageNumber;
+    const totalPages = PDFViewerApplication.pagesCount;
+    const newPage = currentPage + direction;
+
+    if (newPage >= 1 && newPage <= totalPages) {
+      PDFViewerApplication.pdfViewer.currentPageNumber = newPage;
+
+      // Show page indicator briefly
+      showPageIndicator();
+    }
+  }
+
+  function toggleReadingModeControls() {
+    if (mobileUI.readingModeExitVisible) {
+      hideReadingModeControls();
+    } else {
+      showReadingModeControls();
+    }
+  }
+
+  function showReadingModeControls() {
+    const exitOverlay = document.getElementById('readingModeExit');
+    if (exitOverlay) {
+      exitOverlay.classList.remove('hidden');
+      exitOverlay.classList.add('visible');
+      mobileUI.readingModeExitVisible = true;
+
+      // Auto-hide after 3 seconds
+      setTimeout(() => {
+        if (mobileUI.readingMode && mobileUI.readingModeExitVisible) {
+          hideReadingModeControls();
+        }
+      }, 3000);
+    }
+  }
+
+  function hideReadingModeControls() {
+    const exitOverlay = document.getElementById('readingModeExit');
+    if (exitOverlay) {
+      exitOverlay.classList.remove('visible');
+      setTimeout(() => {
+        exitOverlay.classList.add('hidden');
+      }, 300);
+      mobileUI.readingModeExitVisible = false;
+    }
+  }
+
+  function updateReadingModeIndicator() {
+    if (!mobileUI.readingMode) return;
+
+    const pageNumSpan = document.getElementById('readingModePageNum');
+    const totalPagesSpan = document.getElementById('readingModeTotalPages');
+
+    if (PDFViewerApplication.pdfDocument && pageNumSpan && totalPagesSpan) {
+      const currentPage = PDFViewerApplication.pdfViewer.currentPageNumber;
+      const totalPages = PDFViewerApplication.pagesCount;
+
+      pageNumSpan.textContent = currentPage;
+      totalPagesSpan.textContent = totalPages;
+    }
+  }
+
+  function showPageIndicator() {
+    const indicator = document.getElementById('readingModePageIndicator');
+    if (indicator) {
+      indicator.classList.add('visible');
+
+      // Hide after 1.5 seconds
+      setTimeout(() => {
+        indicator.classList.remove('visible');
+      }, 1500);
+    }
+  }
+
+  // ===== TOUCH GESTURES =====
+  let touchGesturesInitialized = false;
+
+  function initializeTouchGestures() {
+    // Prevent multiple initializations
+    if (touchGesturesInitialized) {
+      console.log('Touch gestures already initialized');
+      return;
+    }
+
+    const viewer = document.getElementById('viewer');
+
+    if (viewer) {
+      // Attach to viewer element instead of viewerContainer
+      // Use capture phase to handle events before PDF.js
+      viewer.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true });
+      viewer.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+      viewer.addEventListener('touchend', handleTouchEnd, { passive: false, capture: true });
 
       // Double-tap to zoom
-      viewerContainer.addEventListener('touchend', handleDoubleTap);
+      viewer.addEventListener('touchend', handleDoubleTap);
 
       // Pinch to zoom is handled by PDF.js by default
+      touchGesturesInitialized = true;
+      console.log('Touch gestures initialized on viewer element');
+    } else {
+      console.warn('Viewer element not found, touch gestures not initialized');
     }
   }
 
@@ -371,32 +589,107 @@
     if (e.touches.length === 1) {
       mobileUI.touchStartX = e.touches[0].clientX;
       mobileUI.touchStartY = e.touches[0].clientY;
+      mobileUI.touchStartTime = Date.now();
+      mobileUI.touchMoved = false;
+      mobileUI.isSwiping = false;
+      mobileUI.isPinching = false;
+
+      // Check if we're in page mode (one page at a time)
+      mobileUI.isPageMode = PDFViewerApplication.pdfViewer &&
+                            (PDFViewerApplication.pdfViewer.scrollMode === 3 ||
+                             PDFViewerApplication.pdfViewer.scrollMode === 2);
+    } else if (e.touches.length === 2) {
+      // Two fingers = pinch/zoom, disable swiping
+      mobileUI.isPinching = true;
+      mobileUI.isSwiping = false;
+    }
+  }
+
+  function handleTouchMove(e) {
+    // Don't interfere with multi-touch gestures (pinch zoom)
+    if (e.touches.length > 1) {
+      mobileUI.isPinching = true;
+      mobileUI.isSwiping = false;
+      return;
+    }
+
+    if (e.touches.length === 1 && !mobileUI.isPinching) {
+      const touchCurrentX = e.touches[0].clientX;
+      const touchCurrentY = e.touches[0].clientY;
+      const deltaX = touchCurrentX - mobileUI.touchStartX;
+      const deltaY = touchCurrentY - mobileUI.touchStartY;
+
+      mobileUI.touchMoved = true;
+
+      // Detect if this is a horizontal swipe (more horizontal than vertical)
+      const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
+      const movedEnough = Math.abs(deltaX) > 15; // Minimum movement to detect swipe
+
+      if (isHorizontal && movedEnough) {
+        mobileUI.isSwiping = true;
+
+        // Only prevent default if we're clearly swiping horizontally
+        // This allows the swipe to work for page navigation
+        if (Math.abs(deltaX) > 30) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
     }
   }
 
   function handleTouchEnd(e) {
-    if (e.changedTouches.length === 1) {
+    if (e.changedTouches.length === 1 && !mobileUI.isPinching && mobileUI.touchMoved) {
       const touchEndX = e.changedTouches[0].clientX;
       const touchEndY = e.changedTouches[0].clientY;
+      const touchDuration = Date.now() - mobileUI.touchStartTime;
 
       const deltaX = touchEndX - mobileUI.touchStartX;
       const deltaY = touchEndY - mobileUI.touchStartY;
 
-      // Check if it's a horizontal swipe (more horizontal than vertical)
-      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > mobileUI.swipeThreshold) {
+      // Calculate swipe velocity
+      const velocity = Math.abs(deltaX) / touchDuration;
+
+      // Only process swipe if:
+      // 1. It's primarily horizontal (more horizontal than vertical)
+      // 2. It exceeds the threshold OR has high velocity
+      // 3. It's fast enough (less than 600ms)
+      const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
+      const exceedsThreshold = Math.abs(deltaX) > mobileUI.swipeThreshold;
+      const isFastSwipe = velocity > 0.3; // pixels per millisecond
+      const isFastEnough = touchDuration < 600;
+
+      if (isHorizontal && (exceedsThreshold || isFastSwipe) && isFastEnough) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log('Swipe detected:', {
+          deltaX: deltaX,
+          deltaY: deltaY,
+          velocity: velocity,
+          duration: touchDuration
+        });
+
         if (deltaX > 0) {
           // Swipe right - previous page
           if (PDFViewerApplication.pdfViewer.currentPageNumber > 1) {
+            console.log('Going to previous page');
             PDFViewerApplication.pdfViewer.currentPageNumber--;
           }
         } else {
           // Swipe left - next page
           if (PDFViewerApplication.pdfViewer.currentPageNumber < PDFViewerApplication.pagesCount) {
+            console.log('Going to next page');
             PDFViewerApplication.pdfViewer.currentPageNumber++;
           }
         }
       }
     }
+
+    // Reset swipe state
+    mobileUI.touchMoved = false;
+    mobileUI.isSwiping = false;
+    mobileUI.isPinching = false;
   }
 
   function handleDoubleTap(e) {
@@ -516,6 +809,8 @@
     closeMenu: closeMobileMenu,
     toggleFindbar: toggleMobileFindbar,
     closeFindbar: closeMobileFindbar,
+    enterReadingMode: enterReadingMode,
+    exitReadingMode: exitReadingMode,
   };
 
 })();

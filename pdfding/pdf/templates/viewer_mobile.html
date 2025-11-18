@@ -232,6 +232,10 @@ Licensed under the Apache License, Version 2.0
               </button>
               <div class="menu-divider"></div>
               {% endif %}
+              <button id="readingMode" class="menu-item">
+                <span class="menu-icon">📖</span>
+                <span class="menu-label">Reading Mode</span>
+              </button>
               <button id="presentationMode" class="menu-item">
                 <span class="menu-icon">🖥️</span>
                 <span class="menu-label">Fullscreen</span>
@@ -285,6 +289,21 @@ Licensed under the Apache License, Version 2.0
         </div>
 
       </div> {# mainContainer #}
+
+      {# Reading Mode Controls #}
+      <div id="readingModeExit" class="reading-mode-exit hidden">
+        <button id="exitReadingMode" class="exit-reading-button" title="Exit Reading Mode">✕</button>
+      </div>
+
+      <div class="reading-mode-tap-zones">
+        <div class="tap-zone-left" id="tapZoneLeft"></div>
+        <div class="tap-zone-center" id="tapZoneCenter"></div>
+        <div class="tap-zone-right" id="tapZoneRight"></div>
+      </div>
+
+      <div class="reading-mode-page-indicator" id="readingModePageIndicator">
+        <span id="readingModePageNum">1</span> / <span id="readingModeTotalPages">1</span>
+      </div>
 
       {# Loading indicator #}
       <div id="loadingBar">

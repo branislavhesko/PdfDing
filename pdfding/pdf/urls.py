@@ -21,6 +21,7 @@ urlpatterns = [
     path('update_page', pdf_views.UpdatePage.as_view(), name='update_page'),
     path('update_pdf', pdf_views.UpdatePdf.as_view(), name='update_pdf'),
     path('view/<identifier>', pdf_views.ViewerView.as_view(), name='view_pdf'),
+    path('view_mobile/<identifier>', pdf_views.MobileViewerView.as_view(), name='view_pdf_mobile'),
     path('star/<identifier>', pdf_views.Star.as_view(), name='star'),
     path('archive/<identifier>', pdf_views.Archive.as_view(), name='archive'),
     path('highlights', pdf_views.HighlightOverview.as_view(), name='pdf_highlight_overview'),
